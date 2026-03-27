@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { name: "Protocol", href: "/protocol" },
   { name: "Explorer", href: "/transactions" },
   { name: "About", href: "/about" },
+  { name: "Admin", href: "/admin" },
 ];
 
 export function Navbar() {

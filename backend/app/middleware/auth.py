@@ -40,16 +40,15 @@ def decode_jwt_token(token: str) -> Optional[dict]:
         return None
 
 
-async def require_api_key(
-    api_key: Optional[str] = Security(api_key_header),
-    db: AsyncSession = Depends(get_db),
-) -> APIKey:
+async def _resolve_api_key(api_key: Optional[str], db: AsyncSession) -> APIKey:
+    """Shared key validation logic used by both require_api_key and require_admin_key."""
     if not api_key:
         raise HTTPException(status_code=401, detail="API key required")
 
-    result = await db.execute(select(APIKey).where(APIKey.key == api_key, APIKey.is_active == True))
+    result = await db.execute(
+        select(APIKey).where(APIKey.key == api_key, APIKey.is_active == True)
+    )
     key_record = result.scalar_one_or_none()
-
     if not key_record:
         raise HTTPException(status_code=401, detail="Invalid or inactive API key")
 
@@ -59,5 +58,21 @@ async def require_api_key(
         .values(request_count=APIKey.request_count + 1, last_used_at=datetime.now(timezone.utc))
     )
     await db.commit()
+    return key_record
 
+
+async def require_api_key(
+    api_key: Optional[str] = Security(api_key_header),
+    db: AsyncSession = Depends(get_db),
+) -> APIKey:
+    return await _resolve_api_key(api_key, db)
+
+
+async def require_admin_key(
+    api_key: Optional[str] = Security(api_key_header),
+    db: AsyncSession = Depends(get_db),
+) -> APIKey:
+    key_record = await _resolve_api_key(api_key, db)
+    if not key_record.is_admin:
+        raise HTTPException(status_code=403, detail="Admin privileges required")
     return key_record

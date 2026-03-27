@@ -1,4 +1,4 @@
-"""Order book endpoints: create, list, match, cancel (#26)."""
+"""Order book endpoints: create, list, match, cancel (#26, #59)."""
 
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,6 +10,7 @@ from app.config.redis import get_redis, CacheService
 from app.models.order import SwapOrder
 from app.schemas.order import OrderCreate, OrderResponse, OrderMatch
 from app.middleware.auth import require_api_key
+from app.ws.events import emit_order_event, EventType
 
 router = APIRouter()
 
@@ -32,12 +33,13 @@ async def create_order(data: OrderCreate, db: AsyncSession = Depends(get_db), _=
     await db.commit()
     await db.refresh(order)
 
+    redis = get_redis()
+    cache = CacheService(redis)
     await cache.invalidate_pattern(f"orders:{data.from_chain}:{data.to_chain}:*")
-    
-    # Broadcast update (#30)
-    await get_redis().publish("cb:orders", json.dumps(OrderResponse.model_validate(order).model_dump(), default=str))
 
-    return OrderResponse.model_validate(order)
+    response = OrderResponse.model_validate(order)
+    await emit_order_event(redis, EventType.ORDER_CREATED, response.model_dump())
+    return response
 
 
 @router.get("/", response_model=list[OrderResponse])
@@ -98,12 +100,13 @@ async def match_order(
         order.filled_amount = data.fill_amount
     await db.commit()
 
+    redis = get_redis()
+    cache = CacheService(redis)
     await cache.invalidate_pattern("orders:*")
-    
-    # Broadcast update (#30)
-    await get_redis().publish("cb:orders", json.dumps(OrderResponse.model_validate(order).model_dump(), default=str))
 
-    return OrderResponse.model_validate(order)
+    response = OrderResponse.model_validate(order)
+    await emit_order_event(redis, EventType.ORDER_MATCHED, response.model_dump())
+    return response
 
 
 @router.post("/{order_id}/cancel", response_model=OrderResponse)
@@ -118,9 +121,10 @@ async def cancel_order(order_id: str, db: AsyncSession = Depends(get_db), _=Depe
     order.status = "cancelled"
     await db.commit()
 
+    redis = get_redis()
+    cache = CacheService(redis)
     await cache.invalidate_pattern("orders:*")
-    
-    # Broadcast update (#30)
-    await get_redis().publish("cb:orders", json.dumps(OrderResponse.model_validate(order).model_dump(), default=str))
 
-    return OrderResponse.model_validate(order)
+    response = OrderResponse.model_validate(order)
+    await emit_order_event(redis, EventType.ORDER_CANCELLED, response.model_dump())
+    return response

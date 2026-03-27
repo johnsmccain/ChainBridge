@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useAddressValidation } from "@/hooks/useAddressValidation";
+import { getAddressErrorMessage } from "@/lib/addressValidation";
 
 type Chain = "stellar" | "bitcoin" | "ethereum";
 type SwapStep = "form" | "confirm" | "submitting" | "success" | "error";
@@ -39,11 +41,16 @@ export default function SwapForm() {
 
   const sourceChainInfo = CHAINS.find((c) => c.id === form.sourceChain);
   const destChainInfo = CHAINS.find((c) => c.id === form.destChain);
+  const recipientValidation = useAddressValidation(form.recipientAddress, {
+    chain: form.destChain,
+    debounceMs: 250,
+  });
+  const recipientIsValid = Boolean(form.recipientAddress) && Boolean(recipientValidation.result?.valid);
 
   const isValid =
     form.amount &&
     parseFloat(form.amount) > 0 &&
-    form.recipientAddress.length > 10 &&
+    recipientIsValid &&
     form.sourceChain !== form.destChain;
 
   const handleSubmit = async () => {
@@ -276,6 +283,22 @@ export default function SwapForm() {
         }
         className="w-full p-2 mb-4 border rounded-lg dark:bg-gray-700 dark:border-gray-600 font-mono text-sm"
       />
+
+      {form.recipientAddress.length > 0 && recipientValidation.isValidating && (
+        <p className="text-xs text-gray-500 -mt-3 mb-4">Validating recipient address...</p>
+      )}
+
+      {form.recipientAddress.length > 0 && !recipientValidation.isValidating && !recipientValidation.result?.valid && (
+        <p className="text-red-500 text-sm -mt-3 mb-4">
+          {recipientValidation.result?.error || getAddressErrorMessage(form.destChain)}
+        </p>
+      )}
+
+      {recipientIsValid && (
+        <p className="text-green-600 dark:text-green-400 text-sm -mt-3 mb-4">
+          Recipient address is valid for {destChainInfo?.name}.
+        </p>
+      )}
 
       {/* Timelock */}
       <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">

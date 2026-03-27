@@ -1,4 +1,4 @@
-"""HTLC endpoints: create, claim, refund, status (#26)."""
+"""HTLC endpoints: create, claim, refund, status (#26, #59)."""
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -9,6 +9,7 @@ from app.config.redis import get_redis, CacheService
 from app.models.htlc import HTLC
 from app.schemas.htlc import HTLCCreate, HTLCResponse, HTLCClaim
 from app.middleware.auth import require_api_key
+from app.ws.events import emit_htlc_event, EventType
 
 router = APIRouter()
 
@@ -28,10 +29,13 @@ async def create_htlc(data: HTLCCreate, db: AsyncSession = Depends(get_db), _=De
     await db.commit()
     await db.refresh(htlc)
 
-    cache = CacheService(get_redis())
+    redis = get_redis()
+    cache = CacheService(redis)
     await cache.delete(f"htlc:{htlc.id}")
 
-    return HTLCResponse.model_validate(htlc)
+    response = HTLCResponse.model_validate(htlc)
+    await emit_htlc_event(redis, EventType.HTLC_CREATED, response.model_dump())
+    return response
 
 
 @router.get("/{htlc_id}", response_model=HTLCResponse)
@@ -64,10 +68,13 @@ async def claim_htlc(htlc_id: str, data: HTLCClaim, db: AsyncSession = Depends(g
     htlc.secret = data.secret
     await db.commit()
 
-    cache = CacheService(get_redis())
+    redis = get_redis()
+    cache = CacheService(redis)
     await cache.delete(f"htlc:{htlc_id}")
 
-    return HTLCResponse.model_validate(htlc)
+    response = HTLCResponse.model_validate(htlc)
+    await emit_htlc_event(redis, EventType.HTLC_CLAIMED, response.model_dump())
+    return response
 
 
 @router.post("/{htlc_id}/refund", response_model=HTLCResponse)
@@ -82,10 +89,13 @@ async def refund_htlc(htlc_id: str, db: AsyncSession = Depends(get_db), _=Depend
     htlc.status = "refunded"
     await db.commit()
 
-    cache = CacheService(get_redis())
+    redis = get_redis()
+    cache = CacheService(redis)
     await cache.delete(f"htlc:{htlc_id}")
 
-    return HTLCResponse.model_validate(htlc)
+    response = HTLCResponse.model_validate(htlc)
+    await emit_htlc_event(redis, EventType.HTLC_REFUNDED, response.model_dump())
+    return response
 
 
 @router.get("/{htlc_id}/status")

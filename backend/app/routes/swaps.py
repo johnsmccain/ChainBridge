@@ -1,4 +1,4 @@
-"""Swap status, history, and proof verification endpoints (#26)."""
+"""Swap status, history, and proof verification endpoints (#26, #59)."""
 
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,6 +10,7 @@ from app.config.redis import get_redis, CacheService
 from app.models.swap import CrossChainSwap
 from app.schemas.swap import SwapResponse, SwapProof
 from app.middleware.auth import require_api_key
+from app.ws.events import emit_swap_event, EventType
 
 router = APIRouter()
 
@@ -66,11 +67,11 @@ async def verify_proof(
     swap.state = "executed"
     await db.commit()
 
-    cache = CacheService(get_redis())
+    redis = get_redis()
+    cache = CacheService(redis)
     await cache.delete(f"swap:{swap_id}")
-    
-    # Broadcast update (#30)
-    import json
-    await get_redis().publish(f"cb:swap:{swap_id}", json.dumps({"status": "verified", "swap_id": str(swap.id), "state": swap.state}))
+
+    response = SwapResponse.model_validate(swap)
+    await emit_swap_event(redis, EventType.SWAP_PROOF_VERIFIED, response.model_dump())
 
     return {"status": "verified", "swap_id": str(swap.id), "state": swap.state}
