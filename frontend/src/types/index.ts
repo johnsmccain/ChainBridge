@@ -265,3 +265,21 @@ export interface ProtocolStats {
   avgSettlementTime: string;
   chains: ChainHealth[];
 }
+
+export type {
+  ApiErrorShape,
+  ApiHTLCBaseRecord,
+  ApiHTLCRecord,
+  ApiOrderRecord,
+  ApiSwapRecord,
+  ClaimHTLCPayload,
+  CreateHTLCPayload,
+  CreateOrderPayload,
+  HTLCTimelineEvent,
+  ListHTLCsParams,
+  ListOrdersParams,
+  ListSwapsParams,
+  MatchOrderPayload,
+  VerifySwapProofPayload,
+  VerifySwapProofResponse,
+} from "./api";
