@@ -51,6 +51,13 @@
     border-color: hsl(var(--border));
   }
 
+  /* Ensure all interactive elements have a visible focus ring */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
   html {
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
@@ -101,6 +108,26 @@
 
 /* ===== COMPONENT UTILITIES ===== */
 @layer components {
+  /* Skip-to-main navigation link (visible only on focus) */
+  .skip-to-main {
+    position: absolute;
+    top: -100%;
+    left: 0;
+    padding: 0.6rem 1.25rem;
+    background: hsl(var(--brand));
+    color: hsl(var(--brand-foreground, 0 0% 100%));
+    font-size: 0.875rem;
+    font-weight: 600;
+    z-index: 9999;
+    border-radius: 0 0 0.5rem 0;
+    transition: top 0.15s ease;
+  }
+  .skip-to-main:focus {
+    top: 0;
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
   .glass {
     background: hsl(var(--surface-raised) / 0.7);
     backdrop-filter: blur(12px);

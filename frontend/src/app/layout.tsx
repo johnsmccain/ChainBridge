@@ -16,11 +16,49 @@ const spaceGrotesk = Space_Grotesk({
   variable: "--font-space",
 });
 
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://chainbridge.io";
+
 export const metadata: Metadata = {
-  title: "ChainBridge | Trustless Cross-Chain Swaps",
-  description: "Secure, non-custodial atomic swaps on Stellar, Bitcoin, and Ethereum using HTLCs.",
+  metadataBase: new URL(BASE_URL),
+  title: {
+    default: "ChainBridge | Trustless Cross-Chain Swaps",
+    template: "%s | ChainBridge",
+  },
+  description:
+    "Secure, non-custodial atomic swaps on Stellar, Bitcoin, and Ethereum using HTLCs. Zero counterparty risk, no intermediaries.",
+  keywords: ["cross-chain", "atomic swap", "HTLC", "Stellar", "Bitcoin", "Ethereum", "DeFi"],
+  authors: [{ name: "ChainBridge" }],
+  creator: "ChainBridge",
   icons: {
     icon: "/favicon.ico",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: BASE_URL,
+    siteName: "ChainBridge",
+    title: "ChainBridge | Trustless Cross-Chain Swaps",
+    description:
+      "Secure, non-custodial atomic swaps on Stellar, Bitcoin, and Ethereum using HTLCs. Zero counterparty risk, no intermediaries.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "ChainBridge — Trustless Cross-Chain Swaps",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ChainBridge | Trustless Cross-Chain Swaps",
+    description:
+      "Secure, non-custodial atomic swaps on Stellar, Bitcoin, and Ethereum using HTLCs.",
+    images: ["/og-image.png"],
+    creator: "@chainbridge_io",
+  },
+  alternates: {
+    canonical: BASE_URL,
   },
 };
 
@@ -38,10 +76,19 @@ export default function RootLayout({
           spaceGrotesk.variable
         )}
       >
+        {/* Skip-to-main link — visible on keyboard focus, hidden otherwise */}
+        <a
+          href="#main-content"
+          className="skip-to-main"
+        >
+          Skip to main content
+        </a>
         <Providers>
           <div className="relative flex min-h-screen flex-col">
             <Navbar />
-            <main className="flex-1">{children}</main>
+            <main id="main-content" className="flex-1" tabIndex={-1}>
+              {children}
+            </main>
             <Footer />
           </div>
         </Providers>

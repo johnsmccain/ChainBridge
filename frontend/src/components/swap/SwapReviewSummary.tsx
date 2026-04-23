@@ -33,7 +33,7 @@ export function SwapReviewSummary({ onConfirm, onCancel, isConfirming, swapDetai
             <p className="text-sm text-text-secondary mb-1">Pay</p>
             <div className="flex items-center gap-2">
               <span className="text-2xl font-semibold text-text-primary">{swapDetails.fromAmount}</span>
-              <Badge variant="outline">{swapDetails.fromAsset}</Badge>
+              <Badge variant="default">{swapDetails.fromAsset}</Badge>
             </div>
             <p className="text-xs text-text-muted mt-1">on {swapDetails.fromChain}</p>
           </div>
@@ -48,7 +48,7 @@ export function SwapReviewSummary({ onConfirm, onCancel, isConfirming, swapDetai
             <p className="text-sm text-text-secondary mb-1">Receive</p>
             <div className="flex items-center gap-2">
               <span className="text-2xl font-semibold text-text-primary">{swapDetails.toAmount}</span>
-              <Badge variant="outline">{swapDetails.toAsset}</Badge>
+              <Badge variant="default">{swapDetails.toAsset}</Badge>
             </div>
             <p className="text-xs text-text-muted mt-1">on {swapDetails.toChain}</p>
           </div>

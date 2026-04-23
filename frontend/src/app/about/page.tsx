@@ -1,5 +1,19 @@
+import type { Metadata } from "next";
 import { Card, Badge, Button } from "@/components/ui";
 import { Info, ShieldCheck, Zap, Globe, Layers, ArrowRight } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "About",
+  description:
+    "Learn how ChainBridge uses Hash Time-Locked Contracts (HTLCs) to enable trustless, non-custodial atomic swaps across Stellar, Bitcoin, and Ethereum.",
+  alternates: { canonical: "/about" },
+  openGraph: {
+    title: "About ChainBridge",
+    description:
+      "Learn how ChainBridge uses HTLCs for trustless, non-custodial atomic swaps across Stellar, Bitcoin, and Ethereum.",
+    url: "/about",
+  },
+};
 
 export default function AboutPage() {
   return (

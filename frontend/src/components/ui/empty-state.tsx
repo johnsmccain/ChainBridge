@@ -47,7 +47,10 @@ export function EmptyState({
         className
       )}
     >
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-border bg-surface-overlay text-text-muted">
+      <div
+        className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-border bg-surface-overlay text-text-muted"
+        aria-hidden="true"
+      >
         {icon}
       </div>
       <h3 className="mt-5 text-xl font-bold text-text-primary">{title}</h3>

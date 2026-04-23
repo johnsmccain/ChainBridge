@@ -114,7 +114,10 @@ export function createApiClient({ basePath, getHeaders }: ApiClientOptions) {
   });
 
   instance.interceptors.request.use((request) => {
-    request.headers = mergeHeaders(request.headers, getHeaders?.());
+    const merged = mergeHeaders(request.headers, getHeaders?.());
+    if (merged) {
+      request.headers = merged as typeof request.headers;
+    }
     return request;
   });
 

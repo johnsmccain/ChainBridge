@@ -14,13 +14,16 @@ const sizeStyles = {
 export function Spinner({ size = "md", className }: SpinnerProps) {
   return (
     <div
+      role="status"
+      aria-label="Loading"
       className={cn(
         "animate-spin rounded-full border-text-muted border-t-brand-500",
         sizeStyles[size],
         className
       )}
-      aria-label="Loading"
-    />
+    >
+      <span className="sr-only">Loading…</span>
+    </div>
   );
 }
 
@@ -33,10 +36,12 @@ interface LoadingStateProps {
 export function LoadingState({ label = "Loading…", size = "md", className }: LoadingStateProps) {
   return (
     <div
+      role="status"
+      aria-live="polite"
       className={cn("flex flex-col items-center justify-center gap-3 py-12 text-center", className)}
     >
       <Spinner size={size} />
-      <p className="text-sm text-text-muted animate-pulse">{label}</p>
+      <p className="text-sm text-text-muted animate-pulse" aria-hidden="true">{label}</p>
     </div>
   );
 }

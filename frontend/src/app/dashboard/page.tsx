@@ -14,7 +14,7 @@ export default function DashboardPage() {
         <h2 className="text-xl font-semibold text-text-primary">Profile</h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-           <Input label="Wallet Address" disabled value="0x123...abc" rightElement={<CopyButton text={"0x123...abc"} />} />
+           <Input label="Wallet Address" disabled value="0x123...abc" rightElement={<CopyButton value={"0x123...abc"} />} />
            <Input label="Display Name" placeholder="e.g. Satoshi" />
            <Input label="Email" placeholder="your@email.com" />
         </div>

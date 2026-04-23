@@ -7,12 +7,12 @@ export function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="border-t border-border bg-surface/50 py-12">
+    <footer className="border-t border-border bg-surface/50 py-12" aria-label="Site footer">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
           {/* Brand */}
           <div className="md:col-span-1">
-            <Link href="/" className="flex items-center gap-2">
+            <Link href="/" className="flex items-center gap-2" aria-label="ChainBridge home">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-gradient text-white">
                 <Layers className="h-4 w-4" />
               </div>
@@ -27,7 +27,7 @@ export function Footer() {
           </div>
 
           {/* Links */}
-          <div>
+          <nav aria-label="Platform links">
             <h3 className="text-sm font-semibold text-text-primary">Platform</h3>
             <ul className="mt-4 space-y-2 text-sm text-text-secondary">
               <li>
@@ -46,50 +46,64 @@ export function Footer() {
                 </Link>
               </li>
             </ul>
-          </div>
+          </nav>
 
-          <div>
+          <nav aria-label="Ecosystem links">
             <h3 className="text-sm font-semibold text-text-primary">Ecosystem</h3>
             <ul className="mt-4 space-y-2 text-sm text-text-secondary">
               <li>
                 <a
                   href="https://stellar.org"
                   target="_blank"
+                  rel="noopener noreferrer"
                   className="flex items-center gap-1 hover:text-brand-500 transition"
                 >
-                  Stellar <ExternalLink className="h-3 w-3" />
+                  Stellar <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                  <span className="sr-only">(opens in new tab)</span>
                 </a>
               </li>
               <li>
                 <a
                   href="https://ethereum.org"
                   target="_blank"
+                  rel="noopener noreferrer"
                   className="flex items-center gap-1 hover:text-brand-500 transition"
                 >
-                  Ethereum <ExternalLink className="h-3 w-3" />
+                  Ethereum <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                  <span className="sr-only">(opens in new tab)</span>
                 </a>
               </li>
               <li>
                 <a
                   href="https://bitcoin.org"
                   target="_blank"
+                  rel="noopener noreferrer"
                   className="flex items-center gap-1 hover:text-brand-500 transition"
                 >
-                  Bitcoin <ExternalLink className="h-3 w-3" />
+                  Bitcoin <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                  <span className="sr-only">(opens in new tab)</span>
                 </a>
               </li>
             </ul>
-          </div>
+          </nav>
 
           {/* Social */}
           <div>
             <h3 className="text-sm font-semibold text-text-primary">Stay Connected</h3>
             <div className="mt-4 flex gap-4">
-              <a href="#" className="text-text-muted hover:text-text-primary transition">
-                <Globe className="h-5 w-5" />
+              <a
+                href="#"
+                className="text-text-muted hover:text-text-primary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm"
+                aria-label="ChainBridge website"
+              >
+                <Globe className="h-5 w-5" aria-hidden="true" />
               </a>
-              <a href="#" className="text-text-muted hover:text-text-primary transition">
-                <Share2 className="h-5 w-5" />
+              <a
+                href="#"
+                className="text-text-muted hover:text-text-primary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm"
+                aria-label="Share ChainBridge"
+              >
+                <Share2 className="h-5 w-5" aria-hidden="true" />
               </a>
             </div>
           </div>

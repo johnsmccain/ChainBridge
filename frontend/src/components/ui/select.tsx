@@ -12,6 +12,10 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ className, label, error, hint, options, id, ...props }, ref) => {
     const selectId = id ?? label?.toLowerCase().replace(/\s+/g, "-");
+    const errorId = selectId ? `${selectId}-error` : undefined;
+    const hintId = selectId ? `${selectId}-hint` : undefined;
+    const describedBy =
+      (error ? errorId : undefined) ?? (hint ? hintId : undefined);
 
     return (
       <div className="flex flex-col gap-1.5 w-full">
@@ -24,6 +28,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           <select
             ref={ref}
             id={selectId}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedBy}
             className={cn(
               "w-full appearance-none rounded-xl border border-border bg-surface-raised px-4 py-2.5 text-sm text-text-primary",
               "transition-all duration-150",
@@ -40,12 +46,20 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
               </option>
             ))}
           </select>
-          <div className="pointer-events-none absolute right-4 flex items-center text-text-muted">
+          <div className="pointer-events-none absolute right-4 flex items-center text-text-muted" aria-hidden="true">
              <ChevronDown className="h-4 w-4" />
           </div>
         </div>
-        {error && <p className="text-xs text-red-400">{error}</p>}
-        {hint && !error && <p className="text-xs text-text-muted">{hint}</p>}
+        {error && (
+          <p id={errorId} role="alert" className="text-xs text-red-400">
+            {error}
+          </p>
+        )}
+        {hint && !error && (
+          <p id={hintId} className="text-xs text-text-muted">
+            {hint}
+          </p>
+        )}
       </div>
     );
   }
