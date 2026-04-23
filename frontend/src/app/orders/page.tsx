@@ -2,26 +2,36 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Clock3, RefreshCw, Search, XCircle } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { BookmarkPlus, Clock3, Filter, RefreshCw, Search, Trash2, XCircle } from "lucide-react";
 
 import { Button, Card, EmptyState, Input, ToastContainer } from "@/components/ui";
-import {
-  DEMO_ORDER_OWNER,
-  useMockOrders,
-  useOrderBookStore,
-} from "@/hooks/useOrderBook";
+import { DEMO_ORDER_OWNER, useMockOrders, useOrderBookStore } from "@/hooks/useOrderBook";
 import { useWalletStore } from "@/hooks/useWallet";
 import { Order, OrderStatus } from "@/types";
 import { cn } from "@/lib/utils";
+import { AdvancedFilterDrawer } from "@/components/filters/AdvancedFilterDrawer";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 const PAGE_SIZE = 4;
 
 type FilterStatus = "all" | "active" | "expired" | "cancelled" | "filled";
+type RangeFilter = "all" | "24h" | "7d" | "30d" | "90d";
 type ToastMessage = {
   id: string;
   type: "success" | "error" | "info";
   title: string;
   message?: string;
+};
+
+type OrderFilterPreset = {
+  name: string;
+  query: string;
+  status: FilterStatus;
+  chain: string;
+  asset: string;
+  range: RangeFilter;
 };
 
 function deriveStatus(order: Order): OrderStatus {
@@ -38,6 +48,11 @@ function shortAddress(value: string) {
 }
 
 export default function OrdersPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { localizePath } = useI18n();
+
   const { address } = useWalletStore();
   const ownerAddress = address ?? DEMO_ORDER_OWNER;
   const { seedMockOrders } = useMockOrders();
@@ -45,8 +60,21 @@ export default function OrdersPage() {
   const updateOrder = useOrderBookStore((state) => state.updateOrder);
 
   const [page, setPage] = useState(1);
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
+  const [query, setQuery] = useState(() => searchParams.get("ord_q") ?? "");
+  const [statusFilter, setStatusFilter] = useState<FilterStatus>(
+    () => (searchParams.get("ord_status") as FilterStatus) ?? "all"
+  );
+  const [chainFilter, setChainFilter] = useState(() => searchParams.get("ord_chain") ?? "all");
+  const [assetFilter, setAssetFilter] = useState(() => searchParams.get("ord_asset") ?? "all");
+  const [rangeFilter, setRangeFilter] = useState<RangeFilter>(
+    () => (searchParams.get("ord_range") as RangeFilter) ?? "all"
+  );
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [presetName, setPresetName] = useState("");
+  const [savedPresets, setSavedPresets] = useLocalStorage<OrderFilterPreset[]>(
+    "chainbridge-order-filter-presets",
+    []
+  );
   const [pendingCancelId, setPendingCancelId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -65,29 +93,97 @@ export default function OrdersPage() {
 
   const filtered = useMemo(() => {
     const lowered = query.toLowerCase().trim();
+    const now = Date.now();
+
     return myOrders.filter((order) => {
       const matchesQuery =
         !lowered ||
         order.pair.toLowerCase().includes(lowered) ||
         order.tokenIn.toLowerCase().includes(lowered) ||
-        order.tokenOut.toLowerCase().includes(lowered);
+        order.tokenOut.toLowerCase().includes(lowered) ||
+        order.chainIn.toLowerCase().includes(lowered) ||
+        order.chainOut.toLowerCase().includes(lowered);
 
       if (!matchesQuery) return false;
-      if (statusFilter === "all") return true;
-      if (statusFilter === "active") return order.derivedStatus === OrderStatus.OPEN;
-      if (statusFilter === "expired") return order.derivedStatus === OrderStatus.EXPIRED;
-      if (statusFilter === "cancelled") return order.derivedStatus === OrderStatus.CANCELLED;
-      return order.derivedStatus === OrderStatus.FILLED;
+
+      const statusMatches =
+        statusFilter === "all" ||
+        (statusFilter === "active" && order.derivedStatus === OrderStatus.OPEN) ||
+        (statusFilter === "expired" && order.derivedStatus === OrderStatus.EXPIRED) ||
+        (statusFilter === "cancelled" && order.derivedStatus === OrderStatus.CANCELLED) ||
+        (statusFilter === "filled" && order.derivedStatus === OrderStatus.FILLED);
+
+      if (!statusMatches) return false;
+
+      const chainMatches =
+        chainFilter === "all" || order.chainIn === chainFilter || order.chainOut === chainFilter;
+      if (!chainMatches) return false;
+
+      const assetMatches =
+        assetFilter === "all" || order.tokenIn === assetFilter || order.tokenOut === assetFilter;
+      if (!assetMatches) return false;
+
+      if (rangeFilter === "all") return true;
+
+      const orderTime = new Date(order.timestamp).getTime();
+      if (Number.isNaN(orderTime)) return false;
+      if (rangeFilter === "24h") return now - orderTime <= 24 * 60 * 60 * 1000;
+      if (rangeFilter === "7d") return now - orderTime <= 7 * 24 * 60 * 60 * 1000;
+      if (rangeFilter === "30d") return now - orderTime <= 30 * 24 * 60 * 60 * 1000;
+      return now - orderTime <= 90 * 24 * 60 * 60 * 1000;
     });
-  }, [myOrders, query, statusFilter]);
+  }, [assetFilter, chainFilter, myOrders, query, rangeFilter, statusFilter]);
 
   useEffect(() => {
     setPage(1);
-  }, [query, statusFilter]);
+  }, [query, statusFilter, chainFilter, assetFilter, rangeFilter]);
+
+  useEffect(() => {
+    setQuery(searchParams.get("ord_q") ?? "");
+    setStatusFilter((searchParams.get("ord_status") as FilterStatus) ?? "all");
+    setChainFilter(searchParams.get("ord_chain") ?? "all");
+    setAssetFilter(searchParams.get("ord_asset") ?? "all");
+    setRangeFilter((searchParams.get("ord_range") as RangeFilter) ?? "all");
+  }, [searchParams]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    const put = (key: string, value: string, defaultValue: string) => {
+      if (!value || value === defaultValue) {
+        params.delete(key);
+      } else {
+        params.set(key, value);
+      }
+    };
+
+    put("ord_q", query.trim(), "");
+    put("ord_status", statusFilter, "all");
+    put("ord_chain", chainFilter, "all");
+    put("ord_asset", assetFilter, "all");
+    put("ord_range", rangeFilter, "all");
+
+    const current = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+    const target = `${pathname}${params.toString() ? `?${params.toString()}` : ""}`;
+
+    if (current !== target) {
+      router.replace(target, { scroll: false });
+    }
+  }, [assetFilter, chainFilter, pathname, query, rangeFilter, router, searchParams, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const visibleOrders = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const hasAnyOrders = myOrders.length > 0;
+
+  const chainOptions = useMemo(
+    () => Array.from(new Set(myOrders.flatMap((order) => [order.chainIn, order.chainOut]))).sort(),
+    [myOrders]
+  );
+
+  const assetOptions = useMemo(
+    () => Array.from(new Set(myOrders.flatMap((order) => [order.tokenIn, order.tokenOut]))).sort(),
+    [myOrders]
+  );
 
   function pushToast(toast: Omit<ToastMessage, "id">) {
     setToasts((current) => [...current, { id: `${Date.now()}-${Math.random()}`, ...toast }]);
@@ -115,7 +211,36 @@ export default function OrdersPage() {
   }
 
   const activeCount = myOrders.filter((order) => order.derivedStatus === OrderStatus.OPEN).length;
-  const expiredCount = myOrders.filter((order) => order.derivedStatus === OrderStatus.EXPIRED).length;
+  const expiredCount = myOrders.filter(
+    (order) => order.derivedStatus === OrderStatus.EXPIRED
+  ).length;
+
+  function clearAdvancedFilters() {
+    setStatusFilter("all");
+    setChainFilter("all");
+    setAssetFilter("all");
+    setRangeFilter("all");
+  }
+
+  function savePreset() {
+    const trimmedName = presetName.trim();
+    if (!trimmedName) return;
+
+    const preset: OrderFilterPreset = {
+      name: trimmedName,
+      query,
+      status: statusFilter,
+      chain: chainFilter,
+      asset: assetFilter,
+      range: rangeFilter,
+    };
+
+    setSavedPresets((current) => [
+      preset,
+      ...current.filter((item) => item.name.toLowerCase() !== trimmedName.toLowerCase()),
+    ]);
+    setPresetName("");
+  }
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-12 md:py-20">
@@ -144,25 +269,21 @@ export default function OrdersPage() {
       </div>
 
       <Card variant="raised" className="p-5">
-        <div className="grid gap-3 md:grid-cols-[1.2fr_auto_auto]">
+        <div className="grid gap-3 md:grid-cols-[1.3fr_auto_auto]">
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search pair or token"
             leftElement={<Search className="h-4 w-4" />}
           />
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value as FilterStatus)}
-            className="h-10 rounded-xl border border-border bg-surface-raised px-3 text-sm text-text-primary"
+          <Button
+            variant="secondary"
+            icon={<Filter className="h-4 w-4" />}
+            onClick={() => setDrawerOpen(true)}
           >
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="expired">Expired</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="filled">Filled</option>
-          </select>
-          <Link href="/marketplace">
+            Advanced Filters
+          </Button>
+          <Link href={localizePath("/marketplace")}>
             <Button variant="secondary" className="w-full">
               Browse Market
             </Button>
@@ -187,10 +308,10 @@ export default function OrdersPage() {
                     variant: "secondary",
                     onClick: () => {
                       setQuery("");
-                      setStatusFilter("all");
+                      clearAdvancedFilters();
                     },
                   }
-                : { label: "Browse Market", href: "/marketplace" }
+                : { label: "Browse Market", href: localizePath("/marketplace") }
             }
           />
         ) : (
@@ -231,9 +352,7 @@ export default function OrdersPage() {
                       Expires:{" "}
                       {order.expiresAt ? new Date(order.expiresAt).toLocaleString() : "Not set"}
                     </p>
-                    <p>
-                      Created: {new Date(order.timestamp).toLocaleString()}
-                    </p>
+                    <p>Created: {new Date(order.timestamp).toLocaleString()}</p>
                   </div>
                 </div>
 
@@ -278,7 +397,11 @@ export default function OrdersPage() {
           </span>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>
+          <Button
+            variant="secondary"
+            disabled={page <= 1}
+            onClick={() => setPage((current) => current - 1)}
+          >
             Previous
           </Button>
           <Button
@@ -298,6 +421,143 @@ export default function OrdersPage() {
           setToasts((current) => current.filter((toast) => toast.id !== id));
         }}
       />
+
+      <AdvancedFilterDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onClear={clearAdvancedFilters}
+        title="Order History Filters"
+      >
+        <div className="space-y-5">
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
+              Status
+            </label>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as FilterStatus)}
+              className="h-10 w-full rounded-xl border border-border bg-surface-raised px-3 text-sm text-text-primary"
+            >
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="expired">Expired</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="filled">Filled</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
+              Chain
+            </label>
+            <select
+              value={chainFilter}
+              onChange={(event) => setChainFilter(event.target.value)}
+              className="h-10 w-full rounded-xl border border-border bg-surface-raised px-3 text-sm text-text-primary"
+            >
+              <option value="all">All chains</option>
+              {chainOptions.map((chain) => (
+                <option key={chain} value={chain}>
+                  {chain}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
+              Asset
+            </label>
+            <select
+              value={assetFilter}
+              onChange={(event) => setAssetFilter(event.target.value)}
+              className="h-10 w-full rounded-xl border border-border bg-surface-raised px-3 text-sm text-text-primary"
+            >
+              <option value="all">All assets</option>
+              {assetOptions.map((asset) => (
+                <option key={asset} value={asset}>
+                  {asset}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
+              Time range
+            </label>
+            <select
+              value={rangeFilter}
+              onChange={(event) => setRangeFilter(event.target.value as RangeFilter)}
+              className="h-10 w-full rounded-xl border border-border bg-surface-raised px-3 text-sm text-text-primary"
+            >
+              <option value="all">All time</option>
+              <option value="24h">Last 24 hours</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="90d">Last 90 days</option>
+            </select>
+          </div>
+
+          <div className="space-y-2 rounded-xl border border-border bg-surface-overlay/30 p-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
+              Saved presets
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={presetName}
+                onChange={(event) => setPresetName(event.target.value)}
+                placeholder="Preset name"
+              />
+              <Button
+                variant="secondary"
+                icon={<BookmarkPlus className="h-4 w-4" />}
+                onClick={savePreset}
+              >
+                Save
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {savedPresets.length === 0 ? (
+                <p className="text-xs text-text-muted">No saved presets yet.</p>
+              ) : (
+                savedPresets.map((preset) => (
+                  <div
+                    key={preset.name}
+                    className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuery(preset.query);
+                        setStatusFilter(preset.status);
+                        setChainFilter(preset.chain);
+                        setAssetFilter(preset.asset);
+                        setRangeFilter(preset.range);
+                      }}
+                      className="text-left text-sm text-text-primary"
+                    >
+                      {preset.name}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSavedPresets((current) =>
+                          current.filter((item) => item.name !== preset.name)
+                        )
+                      }
+                      className="rounded-md border border-border p-1.5 text-text-muted transition hover:bg-surface-overlay hover:text-text-primary"
+                      aria-label={`Delete ${preset.name} preset`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </AdvancedFilterDrawer>
     </div>
   );
 }

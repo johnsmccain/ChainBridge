@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Transaction, TransactionStatus } from "@/types";
 import {
@@ -9,13 +10,11 @@ import {
   RefreshCcw,
   Database,
   CheckCircle2,
-  Clock,
-  AlertCircle,
-  ChevronRight,
-  ExternalLink,
-  ShieldCheck,
+  Filter,
+  BookmarkPlus,
+  Trash2,
 } from "lucide-react";
-import { Input, Button, Badge } from "@/components/ui";
+import { Input, Button } from "@/components/ui";
 import { TransactionRow } from "./TransactionRow";
 import { TransactionDetailModal } from "./TransactionDetailModal";
 import { TransactionFeedSkeleton } from "./TransactionFeedSkeleton";
@@ -25,17 +24,50 @@ import {
   buildTransactionLifecycle,
   sleep,
 } from "@/lib/transactionLifecycle";
+import { AdvancedFilterDrawer } from "@/components/filters/AdvancedFilterDrawer";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 interface TransactionFeedProps {
   transactions: Transaction[];
   isLoading?: boolean;
 }
 
+type TxRange = "all" | "24h" | "7d" | "30d" | "90d";
+
+type TransactionFilterPreset = {
+  name: string;
+  search: string;
+  status: TransactionStatus | "all";
+  chain: string;
+  asset: string;
+  range: TxRange;
+};
+
 export function TransactionFeed({ transactions, isLoading }: TransactionFeedProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [isHydrated, setIsHydrated] = useState(false);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<TransactionStatus | "all">("all");
-  const [chainFilter, setChainFilter] = useState<string | "all">("all");
+  const [search, setSearch] = useState(() => searchParams.get("tx_q") ?? "");
+  const [statusFilter, setStatusFilter] = useState<TransactionStatus | "all">(
+    () => (searchParams.get("tx_status") as TransactionStatus | "all") ?? "all"
+  );
+  const [chainFilter, setChainFilter] = useState<string | "all">(
+    () => searchParams.get("tx_chain") ?? "all"
+  );
+  const [assetFilter, setAssetFilter] = useState<string | "all">(
+    () => searchParams.get("tx_asset") ?? "all"
+  );
+  const [rangeFilter, setRangeFilter] = useState<TxRange>(
+    () => (searchParams.get("tx_range") as TxRange) ?? "all"
+  );
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [presetName, setPresetName] = useState("");
+  const [savedPresets, setSavedPresets] = useLocalStorage<TransactionFilterPreset[]>(
+    "chainbridge-tx-filter-presets",
+    []
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const updateTransaction = useTransactionStore((state) => state.updateTransaction);
 
@@ -43,11 +75,11 @@ export function TransactionFeed({ transactions, isLoading }: TransactionFeedProp
     setIsHydrated(true);
   }, []);
 
-  const selectedTx =
-    transactions.find((transaction) => transaction.id === selectedId) ?? null;
+  const selectedTx = transactions.find((transaction) => transaction.id === selectedId) ?? null;
 
   const filteredTransactions = useMemo(() => {
     if (!transactions) return [];
+    const now = Date.now();
 
     const result = transactions.filter((tx) => {
       const searchLower = search.toLowerCase().trim();
@@ -60,12 +92,55 @@ export function TransactionFeed({ transactions, isLoading }: TransactionFeedProp
 
       const matchesStatus = statusFilter === "all" || tx.status === statusFilter;
       const matchesChain = chainFilter === "all" || tx.chain === chainFilter;
+      const matchesAsset = assetFilter === "all" || tx.token === assetFilter;
+      const txTime = new Date(tx.timestamp).getTime();
 
-      return matchesSearch && matchesStatus && matchesChain;
+      let matchesRange = true;
+      if (!Number.isNaN(txTime)) {
+        if (rangeFilter === "24h") matchesRange = now - txTime <= 24 * 60 * 60 * 1000;
+        if (rangeFilter === "7d") matchesRange = now - txTime <= 7 * 24 * 60 * 60 * 1000;
+        if (rangeFilter === "30d") matchesRange = now - txTime <= 30 * 24 * 60 * 60 * 1000;
+        if (rangeFilter === "90d") matchesRange = now - txTime <= 90 * 24 * 60 * 60 * 1000;
+      }
+
+      return matchesSearch && matchesStatus && matchesChain && matchesAsset && matchesRange;
     });
 
     return result;
-  }, [transactions, search, statusFilter, chainFilter]);
+  }, [transactions, search, statusFilter, chainFilter, assetFilter, rangeFilter]);
+
+  useEffect(() => {
+    setSearch(searchParams.get("tx_q") ?? "");
+    setStatusFilter((searchParams.get("tx_status") as TransactionStatus | "all") ?? "all");
+    setChainFilter((searchParams.get("tx_chain") as string | "all") ?? "all");
+    setAssetFilter((searchParams.get("tx_asset") as string | "all") ?? "all");
+    setRangeFilter((searchParams.get("tx_range") as TxRange) ?? "all");
+  }, [searchParams]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    const put = (key: string, value: string, defaultValue: string) => {
+      if (!value || value === defaultValue) {
+        params.delete(key);
+      } else {
+        params.set(key, value);
+      }
+    };
+
+    put("tx_q", search.trim(), "");
+    put("tx_status", statusFilter, "all");
+    put("tx_chain", chainFilter, "all");
+    put("tx_asset", assetFilter, "all");
+    put("tx_range", rangeFilter, "all");
+
+    const current = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+    const target = `${pathname}${params.toString() ? `?${params.toString()}` : ""}`;
+
+    if (current !== target) {
+      router.replace(target, { scroll: false });
+    }
+  }, [assetFilter, chainFilter, pathname, rangeFilter, router, search, searchParams, statusFilter]);
 
   async function retryTransaction(tx: Transaction) {
     updateTransaction(tx.id, {
@@ -109,6 +184,36 @@ export function TransactionFeed({ transactions, isLoading }: TransactionFeedProp
 
   if (isLoading) {
     return <TransactionFeedSkeleton rows={6} />;
+  }
+
+  const chainOptions = Array.from(new Set(transactions.map((tx) => tx.chain))).sort();
+  const assetOptions = Array.from(new Set(transactions.map((tx) => tx.token))).sort();
+
+  function clearAdvancedFilters() {
+    setStatusFilter("all");
+    setChainFilter("all");
+    setAssetFilter("all");
+    setRangeFilter("all");
+  }
+
+  function savePreset() {
+    const trimmedName = presetName.trim();
+    if (!trimmedName) return;
+
+    const preset: TransactionFilterPreset = {
+      name: trimmedName,
+      search,
+      status: statusFilter,
+      chain: chainFilter,
+      asset: assetFilter,
+      range: rangeFilter,
+    };
+
+    setSavedPresets((current) => [
+      preset,
+      ...current.filter((item) => item.name.toLowerCase() !== trimmedName.toLowerCase()),
+    ]);
+    setPresetName("");
   }
 
   const exportData = (format: "csv" | "json") => {
@@ -158,6 +263,15 @@ export function TransactionFeed({ transactions, isLoading }: TransactionFeedProp
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setDrawerOpen(true)}
+            icon={<Filter className="h-4 w-4" />}
+          >
+            Advanced Filters
+          </Button>
+
           <select
             className="h-10 rounded-xl border border-border bg-surface-overlay px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500/50"
             value={statusFilter}
@@ -238,8 +352,7 @@ export function TransactionFeed({ transactions, isLoading }: TransactionFeedProp
               size="sm"
               onClick={() => {
                 setSearch("");
-                setStatusFilter("all");
-                setChainFilter("all");
+                clearAdvancedFilters();
               }}
             >
               Clear all filters
@@ -278,6 +391,127 @@ export function TransactionFeed({ transactions, isLoading }: TransactionFeedProp
           </div>
         </div>
       </div>
+
+      <AdvancedFilterDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onClear={clearAdvancedFilters}
+        title="Transaction Filters"
+      >
+        <div className="space-y-5">
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
+              Chain
+            </label>
+            <select
+              value={chainFilter}
+              onChange={(event) => setChainFilter(event.target.value)}
+              className="h-10 w-full rounded-xl border border-border bg-surface-raised px-3 text-sm text-text-primary"
+            >
+              <option value="all">All chains</option>
+              {chainOptions.map((chain) => (
+                <option key={chain} value={chain}>
+                  {chain}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
+              Asset
+            </label>
+            <select
+              value={assetFilter}
+              onChange={(event) => setAssetFilter(event.target.value)}
+              className="h-10 w-full rounded-xl border border-border bg-surface-raised px-3 text-sm text-text-primary"
+            >
+              <option value="all">All assets</option>
+              {assetOptions.map((asset) => (
+                <option key={asset} value={asset}>
+                  {asset}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
+              Time range
+            </label>
+            <select
+              value={rangeFilter}
+              onChange={(event) => setRangeFilter(event.target.value as TxRange)}
+              className="h-10 w-full rounded-xl border border-border bg-surface-raised px-3 text-sm text-text-primary"
+            >
+              <option value="all">All time</option>
+              <option value="24h">Last 24 hours</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="90d">Last 90 days</option>
+            </select>
+          </div>
+
+          <div className="space-y-2 rounded-xl border border-border bg-surface-overlay/30 p-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
+              Saved presets
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={presetName}
+                onChange={(event) => setPresetName(event.target.value)}
+                placeholder="Preset name"
+              />
+              <Button
+                variant="secondary"
+                icon={<BookmarkPlus className="h-4 w-4" />}
+                onClick={savePreset}
+              >
+                Save
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {savedPresets.length === 0 ? (
+                <p className="text-xs text-text-muted">No saved presets yet.</p>
+              ) : (
+                savedPresets.map((preset) => (
+                  <div
+                    key={preset.name}
+                    className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2"
+                  >
+                    <button
+                      type="button"
+                      className="text-left text-sm text-text-primary"
+                      onClick={() => {
+                        setSearch(preset.search);
+                        setStatusFilter(preset.status);
+                        setChainFilter(preset.chain);
+                        setAssetFilter(preset.asset);
+                        setRangeFilter(preset.range);
+                      }}
+                    >
+                      {preset.name}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSavedPresets((current) =>
+                          current.filter((item) => item.name !== preset.name)
+                        )
+                      }
+                      className="rounded-md border border-border p-1.5 text-text-muted transition hover:bg-surface-overlay hover:text-text-primary"
+                      aria-label={`Delete ${preset.name} preset`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </AdvancedFilterDrawer>
     </div>
   );
 }

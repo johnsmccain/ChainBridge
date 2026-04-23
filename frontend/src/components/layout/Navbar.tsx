@@ -8,22 +8,15 @@ import { DarkModeToggle } from "./DarkModeToggle";
 import { WalletConnect } from "../swap/WalletConnect";
 import { useSettingsStore } from "@/hooks/useSettings";
 import { Layers, Menu, X } from "lucide-react";
-
-const NAV_LINKS = [
-  { name: "Dashboard", href: "/dashboard" },
-  { name: "Swap", href: "/swap" },
-  { name: "Market", href: "/marketplace" },
-  { name: "Orders", href: "/orders" },
-  { name: "HTLCs", href: "/htlcs" },
-  { name: "Settings", href: "/settings" },
-  { name: "Protocol", href: "/protocol" },
-  { name: "Explorer", href: "/transactions" },
-  { name: "About", href: "/about" },
-  { name: "Admin", href: "/admin" },
-];
+import { useI18n } from "@/components/i18n/I18nProvider";
+import { NAV_LINKS } from "@/components/layout/navigation";
+import { stripLocaleFromPathname } from "@/lib/i18n/config";
+import { CommandPalette } from "./CommandPalette";
 
 export function Navbar() {
   const pathname = usePathname();
+  const normalizedPathname = stripLocaleFromPathname(pathname);
+  const { t, localizePath } = useI18n();
   const networkMode = useSettingsStore((state) => state.settings.network.mode);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -36,7 +29,10 @@ export function Navbar() {
         <div className="flex h-16 items-center justify-between">
           {/* Left Side: Logo & Desktop Links */}
           <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-2 transition hover:opacity-80">
+            <Link
+              href={localizePath("/")}
+              className="flex items-center gap-2 transition hover:opacity-80"
+            >
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-glow-sm">
                 <Layers className="h-5 w-5" />
               </div>
@@ -49,16 +45,16 @@ export function Navbar() {
               {NAV_LINKS.map((link) => (
                 <Link
                   key={link.href}
-                  href={link.href}
-                  aria-current={pathname === link.href ? "page" : undefined}
+                  href={localizePath(link.href)}
+                  aria-current={normalizedPathname === link.href ? "page" : undefined}
                   className={cn(
                     "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                    pathname === link.href
+                    normalizedPathname === link.href
                       ? "bg-brand-500/10 text-brand-500"
                       : "text-text-secondary hover:bg-surface-overlay hover:text-text-primary"
                   )}
                 >
-                  {link.name}
+                  {t(link.key)}
                 </Link>
               ))}
             </div>
@@ -82,6 +78,10 @@ export function Navbar() {
             </div>
 
             <div className="hidden sm:block">
+              <CommandPalette />
+            </div>
+
+            <div className="hidden lg:block">
               <WalletConnect />
             </div>
 
@@ -103,7 +103,11 @@ export function Navbar() {
               aria-expanded={isOpen}
               aria-controls="mobile-nav"
             >
-              {isOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
+              {isOpen ? (
+                <X className="h-5 w-5" aria-hidden="true" />
+              ) : (
+                <Menu className="h-5 w-5" aria-hidden="true" />
+              )}
             </button>
           </div>
         </div>
@@ -122,18 +126,18 @@ export function Navbar() {
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
-              href={link.href}
+              href={localizePath(link.href)}
               onClick={() => setIsOpen(false)}
-              aria-current={pathname === link.href ? "page" : undefined}
+              aria-current={normalizedPathname === link.href ? "page" : undefined}
               className={cn(
                 "flex items-center rounded-xl px-4 py-3 text-base font-medium transition-all",
-                pathname === link.href
+                normalizedPathname === link.href
                   ? "bg-brand-500/10 text-brand-500"
                   : "text-text-secondary active:bg-surface-overlay"
               )}
             >
-              {link.name}
-              {pathname === link.href && (
+              {t(link.key)}
+              {normalizedPathname === link.href && (
                 <div className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-500" />
               )}
             </Link>
@@ -144,6 +148,9 @@ export function Navbar() {
               <DarkModeToggle />
             </div>
             <div className="mt-4 sm:hidden">
+              <div className="mb-3">
+                <CommandPalette />
+              </div>
               <WalletConnect />
             </div>
           </div>

@@ -2,21 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import {
-  AlertCircle,
-  ArrowRightLeft,
-  Info,
-  Settings,
-  Share2,
-  Vote,
-  Waves,
-} from "lucide-react";
+import { AlertCircle, ArrowRightLeft, Info, Settings, Share2, Vote, Waves } from "lucide-react";
 
 import { Badge, Button, Card, CardContent, CardFooter, CardHeader, Input } from "@/components/ui";
 import { QuotePreviewCard } from "@/components/swap/QuotePreviewCard";
 import { TimelockConfigurator } from "@/components/swap/TimelockConfigurator";
 import { fetchQuotePreview, type QuotePreview } from "@/lib/quoteApi";
 import { useWalletStore } from "@/hooks/useWallet";
+import { FeeWarningBanner } from "@/components/fees/FeeWarningBanner";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type ChainId = "stellar" | "bitcoin" | "ethereum";
 
@@ -28,6 +22,7 @@ const CHAINS: Array<{ id: ChainId; label: string; tokens: string[] }> = [
 
 export default function SwapPage() {
   const { isConnected } = useWalletStore();
+  const { localizePath } = useI18n();
   const [amount, setAmount] = useState("");
   const [orderType, setOrderType] = useState<"market" | "limit" | "twap">("limit");
   const [sourceChain, setSourceChain] = useState<ChainId>("stellar");
@@ -119,10 +114,14 @@ export default function SwapPage() {
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-12 md:py-20 animate-fade-in">
+      <FeeWarningBanner chains={[sourceChain, destChain]} />
+
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-text-primary">Create Swap</h1>
-          <p className="mt-1 text-sm text-text-secondary">Configure your cross-chain atomic swap.</p>
+          <p className="mt-1 text-sm text-text-secondary">
+            Configure your cross-chain atomic swap.
+          </p>
         </div>
         <Button variant="ghost" size="sm" icon={<Settings className="h-4 w-4" />}>
           Settings
@@ -131,7 +130,9 @@ export default function SwapPage() {
 
       <Card variant="raised" className="overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between bg-surface-overlay/50 py-4">
-          <span className="text-xs font-bold uppercase tracking-wider text-text-muted">Swap Configuration</span>
+          <span className="text-xs font-bold uppercase tracking-wider text-text-muted">
+            Swap Configuration
+          </span>
           <Badge variant="info">HTLC Enabled</Badge>
         </CardHeader>
 
@@ -291,7 +292,10 @@ export default function SwapPage() {
         </CardContent>
 
         <CardFooter className="bg-surface-overlay/30">
-          <Button className="w-full h-12 rounded-xl text-lg font-bold" disabled={!isConnected || !amount || !!quoteError}>
+          <Button
+            className="w-full h-12 rounded-xl text-lg font-bold"
+            disabled={!isConnected || !amount || !!quoteError}
+          >
             {isConnected ? "Initialize Atomic Swap" : "Connect Wallet to Swap"}
           </Button>
         </CardFooter>
@@ -311,34 +315,40 @@ export default function SwapPage() {
 
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         <Link
-          href="/protocol"
+          href={localizePath("/protocol")}
           className="rounded-2xl border border-border bg-surface-overlay/30 p-5 transition hover:border-brand-500/40"
         >
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-500/10 text-brand-500">
             <Vote className="h-5 w-5" />
           </div>
           <h3 className="font-semibold text-text-primary">Governance</h3>
-          <p className="mt-2 text-sm text-text-secondary">Review proposals, delegation, and queued executions.</p>
+          <p className="mt-2 text-sm text-text-secondary">
+            Review proposals, delegation, and queued executions.
+          </p>
         </Link>
         <Link
-          href="/protocol"
+          href={localizePath("/protocol")}
           className="rounded-2xl border border-border bg-surface-overlay/30 p-5 transition hover:border-brand-500/40"
         >
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-500/10 text-brand-500">
             <Waves className="h-5 w-5" />
           </div>
           <h3 className="font-semibold text-text-primary">Liquidity Pools</h3>
-          <p className="mt-2 text-sm text-text-secondary">Inspect fallback AMM routes and LP rewards before submission.</p>
+          <p className="mt-2 text-sm text-text-secondary">
+            Inspect fallback AMM routes and LP rewards before submission.
+          </p>
         </Link>
         <Link
-          href="/protocol"
+          href={localizePath("/protocol")}
           className="rounded-2xl border border-border bg-surface-overlay/30 p-5 transition hover:border-brand-500/40"
         >
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-500/10 text-brand-500">
             <Share2 className="h-5 w-5" />
           </div>
           <h3 className="font-semibold text-text-primary">Share & Earn</h3>
-          <p className="mt-2 text-sm text-text-secondary">Generate referral links, QR codes, and performance analytics.</p>
+          <p className="mt-2 text-sm text-text-secondary">
+            Generate referral links, QR codes, and performance analytics.
+          </p>
         </Link>
       </div>
     </div>
