@@ -4,6 +4,7 @@ export { Badge } from "./badge";
 export { Input } from "./input";
 export { Select } from "./select";
 export { Modal } from "./modal";
+export { Drawer } from "./drawer";
 export { Spinner, LoadingState, Skeleton } from "./spinner";
 export { Toast, ToastContainer } from "./toast";
 export type { ToastType } from "./toast";
