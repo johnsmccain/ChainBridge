@@ -29,6 +29,12 @@ import {
   ActivityTimeline,
   type ActivityTimelineEvent,
 } from "@/components/timeline/ActivityTimeline";
+import {
+  calculateBackoffDelay,
+  getNextRetryTime,
+  isReadyToRetry,
+  formatRetryCountdown,
+} from "@/lib/retryUtils";
 
 type ToastMessage = {
   id: string;
@@ -84,6 +90,7 @@ export default function HTLCStatusPage() {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [optimisticUpdates, setOptimisticUpdates] = useState<Set<string>>(new Set());
+  const [retryCountdown, setRetryCountdown] = useState<number>(0);
   const transactions = useTransactionStore((state) => state.transactions);
   const addTransaction = useTransactionStore((state) => state.addTransaction);
   const updateTransaction = useTransactionStore((state) => state.updateTransaction);
@@ -130,7 +137,24 @@ export default function HTLCStatusPage() {
     setClaimError(null);
     setClaimTxId(null);
     setClaimExplorerUrl(null);
+    setRetryCountdown(0);
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!claimTx?.nextRetryAt) {
+      setRetryCountdown(0);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const remaining = Math.max(0, claimTx.nextRetryAt! - Date.now());
+      setRetryCountdown(Math.ceil(remaining / 1000));
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [claimTx?.nextRetryAt]);
 
   const selected = htlcs.find((item) => item.id === selectedId) ?? htlcs[0] ?? null;
   const secretError = validateSecret(secret);
@@ -255,24 +279,52 @@ export default function HTLCStatusPage() {
       setSecret("");
       await loadHTLCs(false);
     } catch (claimError: any) {
+      const existingTx = transactions.find((t) => t.id === txId);
+      const currentRetryCount = existingTx?.retryCount ?? 0;
+      const isRecoverable = claimError?.response?.status >= 500 || !claimError?.response?.status;
+      const nextRetry = isRecoverable ? getNextRetryTime(currentRetryCount) : undefined;
+
       const message =
         claimError?.response?.data?.detail ??
         "Set NEXT_PUBLIC_CHAINBRIDGE_API_KEY to enable claim actions.";
-      setClaimError(message);
+
+      const errorDetails = [
+        message,
+        isRecoverable && currentRetryCount < 3
+          ? `Retry ${currentRetryCount + 1} of 3 ${nextRetry ? `(${formatRetryCountdown(nextRetry - Date.now())})` : ""}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" • ");
+
+      setClaimError(errorDetails);
       setHtlcs(originalHtlcs);
+
+      console.warn("[HTLC Claim Error]", {
+        id: selected.id,
+        status: claimError?.response?.status,
+        message,
+        retryCount: currentRetryCount,
+        recoverable: isRecoverable,
+        timestamp: new Date().toISOString(),
+      });
+
       updateTransaction(txId, {
         status: TransactionStatus.FAILED,
         failureReason: message,
+        retryCount: currentRetryCount + 1,
+        nextRetryAt: nextRetry,
         lifecycle: buildTransactionLifecycle("Stellar", "broadcast", {
           failedStep: "broadcast",
           errorMessage: `Stellar broadcast failed: ${message}`,
-          retryable: true,
+          retryable: isRecoverable && currentRetryCount < 3,
         }),
       });
+
       pushToast({
         type: "error",
         title: "Claim failed",
-        message,
+        message: errorDetails,
       });
     } finally {
       setActionLoading(false);
@@ -330,13 +382,25 @@ export default function HTLCStatusPage() {
       setRefundTarget(null);
       await loadHTLCs(false);
     } catch (refundError: any) {
+      const isRecoverable =
+        refundError?.response?.status >= 500 || !refundError?.response?.status;
+      const message =
+        refundError?.response?.data?.detail ??
+        "Set NEXT_PUBLIC_CHAINBRIDGE_API_KEY to enable refund actions.";
+
+      console.warn("[HTLC Refund Error]", {
+        id: refundTarget.id,
+        status: refundError?.response?.status,
+        message,
+        recoverable: isRecoverable,
+        timestamp: new Date().toISOString(),
+      });
+
       setHtlcs(originalHtlcs);
       pushToast({
         type: "error",
         title: "Refund failed",
-        message:
-          refundError?.response?.data?.detail ??
-          "Set NEXT_PUBLIC_CHAINBRIDGE_API_KEY to enable refund actions.",
+        message: isRecoverable ? `${message} (retryable)` : message,
       });
     } finally {
       setActionLoading(false);
@@ -603,13 +667,29 @@ export default function HTLCStatusPage() {
                   {claimTx?.lifecycle && (
                     <SigningProgressStepper
                       lifecycle={claimTx.lifecycle}
-                      onRetry={claimTx.lifecycle.retryable ? () => void handleClaim() : undefined}
-                      retryLabel="Retry claim"
+                      onRetry={
+                        claimTx.lifecycle.retryable && isReadyToRetry(claimTx.nextRetryAt)
+                          ? () => void handleClaim()
+                          : undefined
+                      }
+                      retryLabel={
+                        claimTx.nextRetryAt && !isReadyToRetry(claimTx.nextRetryAt)
+                          ? `Retry in ${retryCountdown}s`
+                          : "Retry claim"
+                      }
                     />
                   )}
                   {claimError && (
                     <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-300">
-                      {claimError}
+                      <p>{claimError}</p>
+                      {claimTx?.retryCount && claimTx.retryCount > 0 && (
+                        <p className="mt-2 text-xs text-red-400/80">
+                          Attempt {claimTx.retryCount} of 3 •{" "}
+                          {isReadyToRetry(claimTx.nextRetryAt)
+                            ? "Ready to retry"
+                            : `Next retry in ${retryCountdown}s`}
+                        </p>
+                      )}
                     </div>
                   )}
                   {claimTx?.status === TransactionStatus.COMPLETED && claimExplorerUrl && (

@@ -79,6 +79,8 @@ export interface Transaction {
   explorerUrl?: string;
   lifecycle?: TransactionLifecycle;
   failureReason?: string;
+  retryCount?: number;
+  nextRetryAt?: number;
 }
 
 export interface TransactionStore {
