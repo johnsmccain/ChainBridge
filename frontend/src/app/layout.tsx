@@ -4,6 +4,7 @@ import "@/styles/globals.css";
 import { Providers } from "./providers";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import { cn } from "@/lib/utils";
 
 const inter = Inter({
@@ -31,6 +32,13 @@ export const metadata: Metadata = {
   creator: "ChainBridge",
   icons: {
     icon: "/favicon.ico",
+    apple: "/icons/icon-192.png",
+  },
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "ChainBridge",
   },
   openGraph: {
     type: "website",
@@ -84,6 +92,7 @@ export default function RootLayout({
           Skip to main content
         </a>
         <Providers>
+          <ServiceWorkerRegistrar />
           <div className="relative flex min-h-screen flex-col">
             <Navbar />
             <main id="main-content" className="flex-1" tabIndex={-1}>
