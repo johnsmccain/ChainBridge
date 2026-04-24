@@ -4,7 +4,7 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -33,6 +33,11 @@ class IndexerStatus:
     latest_chain_block: int = 0
     blocks_behind: int = 0
     events_processed: int = 0
+    reorg_count: int = 0
+    last_reorg_block: int | None = None
+    last_reorg_depth: int = 0
+    paused_due_to_reorg: bool = False
+    reorg_history: list[dict[str, Any]] = field(default_factory=list)
     last_error: str | None = None
     last_sync_at: datetime | None = None
 
@@ -50,6 +55,7 @@ class BaseIndexer(ABC):
         self.status = IndexerStatus(chain=chain)
         self._running = False
         self._event_queue: asyncio.Queue[IndexedEvent] = asyncio.Queue()
+        self._pause_until: datetime | None = None
 
     @abstractmethod
     async def get_latest_block(self) -> int:
@@ -73,6 +79,13 @@ class BaseIndexer(ABC):
 
         while self._running:
             try:
+                if self.status.paused_due_to_reorg and self._pause_until:
+                    if datetime.utcnow() < self._pause_until:
+                        await asyncio.sleep(poll_interval)
+                        continue
+                    self.status.paused_due_to_reorg = False
+                    self._pause_until = None
+
                 latest = await self.get_latest_block()
                 self.status.latest_chain_block = latest
                 self.status.blocks_behind = max(
@@ -110,6 +123,35 @@ class BaseIndexer(ABC):
                 logger.error("[%s] Indexer error: %s", self.chain, e)
 
             await asyncio.sleep(poll_interval)
+
+    async def record_reorg(self, reorg_block: int, depth: int) -> None:
+        self.status.reorg_count += 1
+        self.status.last_reorg_block = reorg_block
+        self.status.last_reorg_depth = depth
+        self.status.reorg_history.append(
+            {
+                "reorg_block": reorg_block,
+                "depth": depth,
+                "detected_at": datetime.utcnow().isoformat(),
+            }
+        )
+        self.status.reorg_history = self.status.reorg_history[-50:]
+
+        await self._event_queue.put(
+            IndexedEvent(
+                chain=self.chain,
+                event_type="fork_detected",
+                tx_hash=f"reorg-{self.chain}-{reorg_block}",
+                block_number=reorg_block,
+                contract_address=None,
+                data={"depth": depth, "paused": depth >= 6},
+                timestamp=datetime.utcnow(),
+            )
+        )
+
+        if depth >= 6:
+            self.status.paused_due_to_reorg = True
+            self._pause_until = datetime.utcnow() + timedelta(minutes=2)
 
     def stop(self) -> None:
         """Stop the indexer loop."""

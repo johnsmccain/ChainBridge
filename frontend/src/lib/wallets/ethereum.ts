@@ -1,5 +1,11 @@
 import { BrowserProvider, formatEther } from "ethers";
 import { WalletAdapter } from "@/types/wallet";
+import config from "@/lib/config";
+
+const SUPPORTED_CHAIN_BY_MODE: Record<"mainnet" | "testnet", number> = {
+  mainnet: 1,
+  testnet: 11155111,
+};
 
 export class EthereumAdapter implements WalletAdapter {
   private getProvider() {
@@ -11,11 +17,21 @@ export class EthereumAdapter implements WalletAdapter {
 
   async connect() {
     const provider = this.getProvider();
-    const accounts = await provider.send("eth_requestAccounts", []);
+    await provider.send("eth_requestAccounts", []);
     const signer = await provider.getSigner();
     const address = await signer.getAddress();
+    const network = await provider.getNetwork();
+    const chainId = Number(network.chainId);
+    const expectedChainId = SUPPORTED_CHAIN_BY_MODE[config.ethereum.network];
+    const isUnsupportedNetwork = chainId !== expectedChainId;
 
-    return { address, publicKey: address }; // For EVM, address is the primary ID
+    return {
+      address,
+      publicKey: address,
+      network: `chain:${chainId}`,
+      walletName: "MetaMask",
+      isUnsupportedNetwork,
+    };
   }
 
   async disconnect() {

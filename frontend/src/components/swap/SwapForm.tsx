@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAddressValidation } from "@/hooks/useAddressValidation";
 import { getAddressErrorMessage } from "@/lib/addressValidation";
+import { useWalletStore } from "@/hooks/useWallet";
 import TimelockWarnings from "./TimelockWarnings";
 import FeeDisplay from "./FeeDisplay";
 
@@ -28,6 +29,13 @@ const ESTIMATED_FEES: Record<Chain, string> = {
   ethereum: "~0.002 ETH",
 };
 
+const DECIMALS_BY_ASSET: Record<string, number> = {
+  XLM: 7,
+  USDC: 6,
+  BTC: 8,
+  ETH: 18,
+};
+
 export default function SwapForm() {
   const [step, setStep] = useState<SwapStep>("form");
   const [error, setError] = useState("");
@@ -49,10 +57,23 @@ export default function SwapForm() {
   });
   const recipientIsValid =
     Boolean(form.recipientAddress) && Boolean(recipientValidation.result?.valid);
+  const walletBalance = useWalletStore((state) => state.balance);
+  const connectedChain = useWalletStore((state) => state.chain);
+  const maxDecimals = DECIMALS_BY_ASSET[form.token] ?? 6;
+  const amountRegex = new RegExp(`^\\d*(?:\\.\\d{0,${maxDecimals}})?$`);
+  const amountNumeric = form.amount ? Number.parseFloat(form.amount) : 0;
+  const amountIsValidFormat = form.amount.length === 0 || amountRegex.test(form.amount);
+  const amountWithinBalance =
+    connectedChain !== form.sourceChain ||
+    !walletBalance ||
+    Number.isNaN(Number.parseFloat(walletBalance)) ||
+    amountNumeric <= Number.parseFloat(walletBalance);
 
   const isValid =
     form.amount &&
-    parseFloat(form.amount) > 0 &&
+    amountIsValidFormat &&
+    amountNumeric > 0 &&
+    amountWithinBalance &&
     recipientIsValid &&
     form.sourceChain !== form.destChain;
 
@@ -236,14 +257,44 @@ export default function SwapForm() {
         Amount
       </label>
       <input
-        type="number"
+        type="text"
+        inputMode="decimal"
         value={form.amount}
-        onChange={(e) => setForm({ ...form, amount: e.target.value })}
+        onChange={(e) => {
+          const next = e.target.value.trim();
+          if (next === "" || amountRegex.test(next)) {
+            setForm({ ...form, amount: next });
+          }
+        }}
         placeholder="0.00"
         min="0"
-        step="0.000001"
+        step={maxDecimals > 0 ? `0.${"0".repeat(Math.max(0, maxDecimals - 1))}1` : "1"}
         className="w-full p-2 mb-4 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
       />
+      <div className="mb-4 flex items-center justify-between text-xs text-gray-500">
+        <span>Max decimals: {maxDecimals}</span>
+        <button
+          type="button"
+          className="text-blue-600 hover:text-blue-500 disabled:opacity-50"
+          disabled={connectedChain !== form.sourceChain || !walletBalance}
+          onClick={() => {
+            if (connectedChain !== form.sourceChain || !walletBalance) return;
+            const parsed = Number.parseFloat(walletBalance);
+            if (!Number.isFinite(parsed)) return;
+            setForm({ ...form, amount: parsed.toFixed(maxDecimals).replace(/\.?0+$/, "") });
+          }}
+        >
+          Max
+        </button>
+      </div>
+      {!amountIsValidFormat && (
+        <p className="text-red-500 text-sm -mt-3 mb-4">
+          Invalid amount format. Use up to {maxDecimals} decimal places for {form.token}.
+        </p>
+      )}
+      {amountIsValidFormat && !amountWithinBalance && (
+        <p className="text-red-500 text-sm -mt-3 mb-4">Amount exceeds connected wallet balance.</p>
+      )}
 
       {/* Destination Chain */}
       <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">

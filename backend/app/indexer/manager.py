@@ -91,6 +91,11 @@ class IndexerManager:
                 "latest_chain_block": s.latest_chain_block,
                 "blocks_behind": s.blocks_behind,
                 "events_processed": s.events_processed,
+                "reorg_count": s.reorg_count,
+                "last_reorg_block": s.last_reorg_block,
+                "last_reorg_depth": s.last_reorg_depth,
+                "paused_due_to_reorg": s.paused_due_to_reorg,
+                "reorg_history": s.reorg_history,
                 "last_error": s.last_error,
                 "last_sync_at": s.last_sync_at.isoformat() if s.last_sync_at else None,
             }

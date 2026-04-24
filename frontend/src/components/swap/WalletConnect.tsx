@@ -12,6 +12,13 @@ import { WalletConnectionModal } from "@/components/wallet/WalletConnectionModal
 function formatNetworkLabel(network: string | null | undefined): string {
   if (!network) return "Network unavailable";
 
+  if (network.startsWith("chain:")) {
+    const chainId = Number.parseInt(network.split(":")[1] || "", 10);
+    if (chainId === 1) return "Ethereum Mainnet";
+    if (chainId === 11155111) return "Sepolia";
+    return `Chain ${chainId}`;
+  }
+
   switch (network) {
     case "mainnet":
       return "Mainnet";
@@ -42,6 +49,7 @@ export function WalletConnect() {
 
   const networkLabel = formatNetworkLabel(network);
   const expectedNetworkLabel = formatNetworkLabel(config.stellar.network);
+  const expectedEthereumLabel = config.ethereum.network === "mainnet" ? "Ethereum Mainnet" : "Sepolia";
 
   const handleConnect = async (targetChain: ChainType) => {
     try {
@@ -49,8 +57,10 @@ export function WalletConnect() {
 
       if (targetChain === "stellar" && isUnsupportedNetwork) {
         toast.warning(
-          "Unsupported Stellar network",
-          `Switch Freighter to ${expectedNetworkLabel} to continue with ChainBridge.`
+          targetChain === "stellar" ? "Unsupported Stellar network" : "Unsupported Ethereum network",
+          targetChain === "stellar"
+            ? `Switch Freighter to ${expectedNetworkLabel} to continue with ChainBridge.`
+            : `Switch MetaMask to ${expectedEthereumLabel} to continue with ChainBridge.`
         );
       } else {
         toast.success(
@@ -85,6 +95,9 @@ export function WalletConnect() {
             {activeChain === "stellar" && (
               <span className="text-[10px] text-text-muted">Network: {networkLabel}</span>
             )}
+            {chain === "ethereum" && (
+              <span className="text-[10px] text-text-muted">Network: {networkLabel}</span>
+            )}
           </div>
           <Badge variant="chain" chain={activeChain || ""}>
             {activeChain?.toUpperCase()}
@@ -109,6 +122,15 @@ export function WalletConnect() {
             <p>
               Freighter is connected to {networkLabel}. Switch to {expectedNetworkLabel} to use
               ChainBridge on the supported Stellar network.
+            </p>
+          </div>
+        )}
+        {chain === "ethereum" && isUnsupportedNetwork && (
+          <div className="flex max-w-xs items-start gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-left text-xs text-amber-200">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>
+              MetaMask is connected to {networkLabel}. Switch to {expectedEthereumLabel} to use
+              ChainBridge on the supported Ethereum network.
             </p>
           </div>
         )}

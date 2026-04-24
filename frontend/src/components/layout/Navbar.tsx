@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { DarkModeToggle } from "./DarkModeToggle";
 import { WalletConnect } from "../swap/WalletConnect";
@@ -10,11 +10,12 @@ import { useSettingsStore } from "@/hooks/useSettings";
 import { Layers, Menu, X } from "lucide-react";
 import { useI18n } from "@/components/i18n/I18nProvider";
 import { NAV_LINKS } from "@/components/layout/navigation";
-import { stripLocaleFromPathname } from "@/lib/i18n/config";
+import { SUPPORTED_LOCALES, stripLocaleFromPathname } from "@/lib/i18n/config";
 import { CommandPalette } from "./CommandPalette";
 
 export function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const normalizedPathname = stripLocaleFromPathname(pathname);
   const { t, localizePath } = useI18n();
   const networkMode = useSettingsStore((state) => state.settings.network.mode);
@@ -80,6 +81,22 @@ export function Navbar() {
             <div className="hidden sm:block">
               <CommandPalette />
             </div>
+
+            <select
+              aria-label="Language selector"
+              value={pathname.split("/").filter(Boolean)[0] || "en"}
+              onChange={(event) => {
+                const basePath = stripLocaleFromPathname(pathname);
+                router.push(`/${event.target.value}${basePath === "/" ? "" : basePath}`);
+              }}
+              className="hidden rounded-lg border border-border bg-surface-overlay px-2 py-1 text-xs text-text-secondary md:block"
+            >
+              {SUPPORTED_LOCALES.map((locale) => (
+                <option key={locale} value={locale}>
+                  {locale.toUpperCase()}
+                </option>
+              ))}
+            </select>
 
             <div className="hidden lg:block">
               <WalletConnect />

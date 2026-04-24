@@ -103,9 +103,13 @@ class BitcoinIndexer(BaseIndexer):
         return events
 
     async def handle_reorg(self, reorg_block: int) -> None:
+        depth = max(1, self.status.last_synced_block - reorg_block)
+        await self.record_reorg(reorg_block, depth)
+        self.status.last_synced_block = max(0, reorg_block - 1)
         logger.warning(
-            "[bitcoin] Reorg detected at block %d. Rolling back indexed events.",
+            "[bitcoin] Reorg detected at block %d (depth=%d). Rolling back indexed events.",
             reorg_block,
+            depth,
         )
         # In production: delete indexed events >= reorg_block from DB
         # and re-index from reorg_block

@@ -2,6 +2,24 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { ChainType, WalletStore } from "@/types/wallet";
 import { getAdapter } from "../lib/wallets";
+import config from "@/lib/config";
+
+const EXPECTED_ETH_CHAIN_ID = config.ethereum.network === "mainnet" ? 1 : 11155111;
+
+let ethereumAccountsListener: ((accounts: string[]) => void) | null = null;
+let ethereumChainListener: ((chainIdHex: string) => void) | null = null;
+
+function detachEthereumListeners() {
+  if (typeof window === "undefined" || !window.ethereum) return;
+  if (ethereumAccountsListener) {
+    window.ethereum.removeListener?.("accountsChanged", ethereumAccountsListener);
+    ethereumAccountsListener = null;
+  }
+  if (ethereumChainListener) {
+    window.ethereum.removeListener?.("chainChanged", ethereumChainListener);
+    ethereumChainListener = null;
+  }
+}
 
 export const useWalletStore = create<WalletStore>()(
   persist(
@@ -20,6 +38,10 @@ export const useWalletStore = create<WalletStore>()(
       connect: async (chain: ChainType) => {
         set({ isConnecting: true, error: null });
         try {
+          if (chain === "ethereum") {
+            detachEthereumListeners();
+          }
+
           const adapter = getAdapter(chain);
           const { address, publicKey, network, walletName, isUnsupportedNetwork } =
             await adapter.connect();
@@ -36,6 +58,37 @@ export const useWalletStore = create<WalletStore>()(
             isConnecting: false,
             balance,
           });
+
+          if (chain === "ethereum" && typeof window !== "undefined" && window.ethereum) {
+            ethereumAccountsListener = (accounts: string[]) => {
+              const nextAddress = accounts[0] ?? null;
+              if (!nextAddress) {
+                void useWalletStore.getState().disconnect();
+                return;
+              }
+              set({
+                address: nextAddress,
+                publicKey: nextAddress,
+              });
+              void adapter
+                .getBalance(nextAddress)
+                .then((nextBalance) => set({ balance: nextBalance }))
+                .catch(() => {
+                  // No-op to avoid forcing disconnect on transient RPC failures.
+                });
+            };
+
+            ethereumChainListener = (chainIdHex: string) => {
+              const chainId = Number.parseInt(chainIdHex, 16);
+              set({
+                network: `chain:${chainId}`,
+                isUnsupportedNetwork: chainId !== EXPECTED_ETH_CHAIN_ID,
+              });
+            };
+
+            window.ethereum.on?.("accountsChanged", ethereumAccountsListener);
+            window.ethereum.on?.("chainChanged", ethereumChainListener);
+          }
         } catch (error: any) {
           set({
             error: error.message || "Failed to connect wallet",
@@ -48,6 +101,9 @@ export const useWalletStore = create<WalletStore>()(
       disconnect: async () => {
         const { chain } = get();
         if (chain) {
+          if (chain === "ethereum") {
+            detachEthereumListeners();
+          }
           await getAdapter(chain).disconnect();
         }
 
